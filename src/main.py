@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+try:
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+except ImportError:
+    AsyncIOScheduler = None  # type: ignore[assignment,misc]
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -104,10 +107,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await _seed_topology(settings)
 
     # 3. Start Scheduler
-    scheduler = AsyncIOScheduler()
-    scheduler.start()
+    scheduler = None
+    if AsyncIOScheduler is not None:
+        try:
+            scheduler = AsyncIOScheduler()
+            scheduler.start()
+            logger.info("AsyncIOScheduler started successfully.")
+        except Exception as exc:
+            logger.warning("Could not start AsyncIOScheduler: {}", exc)
+            scheduler = None
+    else:
+        logger.info("APScheduler not installed; running in event-driven mode.")
     app.state.scheduler = scheduler
-    logger.info("AsyncIOScheduler started successfully.")
 
     # 4. Attach Event Bus
     app.state.event_bus = event_bus
@@ -117,7 +128,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Shutdown sequence
     logger.info("Shutting down application...")
-    if scheduler.running:
+    if scheduler and getattr(scheduler, "running", False):
         scheduler.shutdown(wait=False)
         logger.info("AsyncIOScheduler stopped.")
 
