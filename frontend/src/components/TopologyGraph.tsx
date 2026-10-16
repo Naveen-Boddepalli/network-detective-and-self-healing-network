@@ -26,41 +26,51 @@ const NetworkNodeComponent: React.FC<{
 }> = ({ data }) => {
   const { node, isSelected, isAffected, isAlternate } = data;
 
+  const status = (node.status || 'up').toLowerCase();
+  const isDown = status === 'down' || isAffected;
+  const isDegraded = status === 'degraded';
+
   // Select appropriate icon
   const getIcon = () => {
     switch (node.node_type?.toLowerCase()) {
       case 'core_router':
-        return <Router className="w-5 h-5 text-indigo-400" />;
+        return <Router className={`w-5 h-5 ${isDown ? 'text-red-400' : isAlternate ? 'text-cyan-400' : 'text-indigo-400'}`} />;
       case 'gateway':
-        return <Globe className="w-5 h-5 text-sky-400" />;
+        return <Globe className={`w-5 h-5 ${isDown ? 'text-red-400' : isAlternate ? 'text-cyan-400' : 'text-sky-400'}`} />;
       case 'server':
-        return <Server className="w-5 h-5 text-emerald-400" />;
+        return <Server className={`w-5 h-5 ${isDown ? 'text-red-400' : isAlternate ? 'text-cyan-400' : 'text-emerald-400'}`} />;
       default:
-        return <Cpu className="w-5 h-5 text-blue-400" />;
+        return <Cpu className={`w-5 h-5 ${isDown ? 'text-red-400' : isAlternate ? 'text-cyan-400' : 'text-blue-400'}`} />;
     }
   };
 
-  const status = (node.status || 'up').toLowerCase();
-
   return (
     <div
-      className={`group relative flex flex-col min-w-[170px] max-w-[210px] rounded-xl border p-3 backdrop-blur-md transition-all duration-200 shadow-lg ${
-        isSelected
+      className={`group relative flex flex-col min-w-[170px] max-w-[210px] rounded-xl border p-3 backdrop-blur-md transition-all duration-300 shadow-xl ${
+        isDown
+          ? 'border-red-500 bg-red-950/70 ring-2 ring-red-500/50 shadow-red-950/50'
+          : isSelected
           ? 'border-blue-500 bg-gray-900/95 ring-2 ring-blue-500/50 shadow-blue-500/10'
-          : isAffected
-          ? 'border-red-500/90 bg-red-950/40 ring-2 ring-red-500/30'
           : isAlternate
-          ? 'border-cyan-500/90 bg-cyan-950/30 ring-2 ring-cyan-500/30'
+          ? 'border-cyan-400 bg-cyan-950/60 ring-2 ring-cyan-400/50 shadow-cyan-950/30'
+          : isDegraded
+          ? 'border-amber-500/80 bg-amber-950/40 ring-1 ring-amber-500/30'
           : 'border-gray-800 bg-gray-900/85 hover:border-gray-700 hover:bg-gray-800/90'
       }`}
     >
       {/* Node Header: Icon, Name & Status Dot */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 overflow-hidden">
-          <div className="p-1.5 rounded-lg bg-gray-800/80 border border-gray-700/60 flex-shrink-0">
+          <div className={`p-1.5 rounded-lg border flex-shrink-0 ${
+            isDown
+              ? 'bg-red-900/50 border-red-500/40'
+              : isAlternate
+              ? 'bg-cyan-900/40 border-cyan-500/40'
+              : 'bg-gray-800/80 border-gray-700/60'
+          }`}>
             {getIcon()}
           </div>
-          <span className="font-semibold text-xs text-gray-100 truncate tracking-wide">
+          <span className={`font-semibold text-xs truncate tracking-wide ${isDown ? 'text-red-200' : 'text-gray-100'}`}>
             {node.name}
           </span>
         </div>
@@ -68,18 +78,18 @@ const NetworkNodeComponent: React.FC<{
         {/* Status Indicator Dot */}
         <div className="flex items-center flex-shrink-0">
           <span className="relative flex h-2.5 w-2.5">
-            {status !== 'up' && (
+            {(isDown || isDegraded) && (
               <span
                 className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  status === 'down' ? 'bg-red-400' : 'bg-amber-400'
+                  isDown ? 'bg-red-400' : 'bg-amber-400'
                 }`}
               />
             )}
             <span
               className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                status === 'down'
+                isDown
                   ? 'bg-red-500'
-                  : status === 'degraded'
+                  : isDegraded
                   ? 'bg-amber-500'
                   : 'bg-emerald-400'
               }`}
@@ -91,15 +101,23 @@ const NetworkNodeComponent: React.FC<{
       {/* Node Subtitle: IP & Type */}
       <div className="mt-2 pt-2 border-t border-gray-800/60 flex items-center justify-between text-[11px] font-mono text-gray-400">
         <span>{node.ip_address}</span>
-        <span className="capitalize text-[10px] px-1.5 py-0.5 rounded bg-gray-800/80 text-gray-300">
-          {node.node_type?.replace('_', ' ') || 'node'}
+        <span className={`capitalize text-[10px] px-1.5 py-0.5 rounded ${
+          isDown ? 'bg-red-900/40 text-red-300' : 'bg-gray-800/80 text-gray-300'
+        }`}>
+          {isDown ? 'OFFLINE' : node.node_type?.replace('_', ' ') || 'node'}
         </span>
       </div>
 
-      {isAffected && (
-        <div className="mt-1 flex items-center gap-1 text-[10px] text-red-400 font-medium">
-          <AlertCircle className="w-3 h-3" />
-          <span>Fault Detected</span>
+      {isDown && (
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-red-300 font-semibold bg-red-900/50 border border-red-500/40 px-2 py-0.5 rounded">
+          <AlertCircle className="w-3 h-3 text-red-400 animate-pulse flex-shrink-0" />
+          <span>FAULT DETECTED</span>
+        </div>
+      )}
+      {!isDown && isAlternate && (
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-cyan-300 font-semibold bg-cyan-900/50 border border-cyan-400/40 px-2 py-0.5 rounded">
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping flex-shrink-0" />
+          <span>⚡ DETOUR ROUTE</span>
         </div>
       )}
     </div>
@@ -132,10 +150,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
       const isAffected =
         activeIncident?.affected_component === node.id ||
-        activeIncident?.source_node === node.id ||
-        (activeIncident?.status !== 'verified' && node.status === 'down');
+        (node.status || '').toLowerCase() === 'down';
 
       const isAlternate =
+        !isAffected &&
         !!activeIncident?.alternate_path &&
         activeIncident.alternate_path.includes(node.id);
 
@@ -157,6 +175,17 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   const edges: FlowingerEdge[] = useMemo(() => {
     if (!topology || !topology.links) return [];
 
+    // Find all downed or affected node IDs
+    const downedNodeIds = new Set(
+      topology.nodes
+        ?.filter(
+          (n) =>
+            (n.status || '').toLowerCase() === 'down' ||
+            activeIncident?.affected_component === n.id
+        )
+        .map((n) => n.id) || []
+    );
+
     // Check alternate path pairs if incident is healing or resolved
     const altPairs = new Set<string>();
     if (activeIncident?.alternate_path && activeIncident.alternate_path.length > 1) {
@@ -169,31 +198,52 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     }
 
     return topology.links.map((link) => {
-      const isAlt =
-        altPairs.has(`${link.source_node_id}->${link.target_node_id}`) ||
-        altPairs.has(`${link.target_node_id}->${link.source_node_id}`);
+      const isDirectlyDown =
+        (link.status || '').toLowerCase() === 'down' ||
+        activeIncident?.affected_component === link.id;
 
-      const linkStatus = (link.status || 'up').toLowerCase();
+      const connectsToDownedNode =
+        downedNodeIds.has(link.source_node_id) ||
+        downedNodeIds.has(link.target_node_id);
+
+      const isSevered = isDirectlyDown || connectsToDownedNode;
+
+      const isAlt =
+        !isSevered &&
+        (altPairs.has(`${link.source_node_id}->${link.target_node_id}`) ||
+          altPairs.has(`${link.target_node_id}->${link.source_node_id}`));
+
+      const edgeStatus = isSevered
+        ? 'down'
+        : (link.status || 'up').toLowerCase();
+
+      const label = isSevered
+        ? '✖ SEVERED'
+        : isAlt
+        ? '⚡ HEALED'
+        : link.bandwidth_mbps >= 1000
+        ? `${link.bandwidth_mbps / 1000}G`
+        : `${link.bandwidth_mbps}M`;
 
       return {
         id: link.id,
         source: link.source_node_id,
         target: link.target_node_id,
-        label: isAlt ? 'HEALED' : `${link.bandwidth_mbps >= 1000 ? `${link.bandwidth_mbps / 1000}G` : `${link.bandwidth_mbps}M`}`,
-        animated: linkStatus === 'up' || isAlt,
+        label,
+        animated: !isSevered && (edgeStatus === 'up' || isAlt),
         data: {
-          status: linkStatus,
+          status: edgeStatus,
           isAlternate: isAlt,
         },
         style: {
-          stroke: isAlt
-            ? '#3b82f6'
-            : linkStatus === 'down'
+          stroke: isSevered
             ? '#ef4444'
-            : linkStatus === 'degraded'
+            : isAlt
+            ? '#38bdf8'
+            : edgeStatus === 'degraded'
             ? '#f59e0b'
             : '#10b981',
-          strokeWidth: isAlt ? 3.5 : 2,
+          strokeWidth: isAlt ? 4 : isSevered ? 3 : 2,
         },
       };
     });
@@ -239,12 +289,12 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-          <span className="text-gray-300">Fault / Down</span>
+          <span className="text-gray-300">Fault / Severed</span>
         </div>
-        {activeIncident?.alternate_path && (
+        {activeIncident?.alternate_path && activeIncident.alternate_path.length > 0 && (
           <div className="flex items-center gap-1.5 border-l border-gray-700 pl-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-blue-400 font-medium">Alternate Healed Path</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse" />
+            <span className="text-sky-300 font-medium">⚡ Alternate Detour Route</span>
           </div>
         )}
       </div>

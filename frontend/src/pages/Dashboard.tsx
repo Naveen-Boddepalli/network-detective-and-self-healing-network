@@ -48,7 +48,7 @@ export const Dashboard: React.FC = () => {
 
   // Active incident for path highlighting
   const activeIncident = recentIncidents.find(
-    (inc) => inc.status !== 'verified' && inc.status !== 'resolved'
+    (inc) => inc.status !== 'verified' && (inc.status as string) !== 'resolved'
   );
 
   const fetchStatsAndIncidents = useCallback(async () => {

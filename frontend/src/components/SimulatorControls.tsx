@@ -31,7 +31,6 @@ export const SimulatorControls: React.FC<SimulatorControlsProps> = ({
   const [targetType, setTargetType] = useState<'node' | 'link'>('node');
   const [selectedTargetId, setSelectedTargetId] = useState<string>('');
   const [selectedFaultType, setSelectedFaultType] = useState<string>(FaultType.NODE_DOWN);
-  const [confirmDialog, setConfirmDialog] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Set default target ID if not selected
@@ -50,17 +49,12 @@ export const SimulatorControls: React.FC<SimulatorControlsProps> = ({
     }
   };
 
-  const handleTriggerInject = () => {
+  const handleTriggerInject = async () => {
     if (!activeTargetId) return;
-    setConfirmDialog(true);
-  };
-
-  const executeInjection = async () => {
-    setConfirmDialog(false);
     try {
       await onInjectFailure(targetType, activeTargetId, selectedFaultType);
       setStatusMessage({
-        text: `Successfully injected ${selectedFaultType} into ${activeTargetId}`,
+        text: `Injected ${selectedFaultType} into ${activeTargetId}. Graph reacting...`,
         type: 'success',
       });
       setTimeout(() => setStatusMessage(null), 5000);
@@ -242,44 +236,6 @@ export const SimulatorControls: React.FC<SimulatorControlsProps> = ({
         >
           <Activity className="w-4 h-4 flex-shrink-0" />
           <span>{statusMessage.text}</span>
-        </div>
-      )}
-
-      {/* Confirmation Dialog Modal */}
-      {confirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center gap-3 text-amber-400">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-bold text-white text-base">Confirm Fault Injection</h4>
-                <p className="text-xs text-gray-400">Chaos engineering safety confirmation</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-gray-300 leading-relaxed">
-              Are you sure you want to inject <span className="font-bold text-red-400">{selectedFaultType}</span> into{' '}
-              <span className="font-bold text-white">{targetType} [{activeTargetId}]</span>?
-              This will trigger self-healing automated rerouting procedures.
-            </p>
-
-            <div className="flex gap-3 justify-end pt-2">
-              <button
-                onClick={() => setConfirmDialog(false)}
-                className="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={executeInjection}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-lg shadow-red-900/40 transition-all"
-              >
-                Confirm & Inject
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

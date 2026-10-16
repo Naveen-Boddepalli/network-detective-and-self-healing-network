@@ -186,7 +186,7 @@ export const Flowinger: React.FC<FlowingerProps> = ({
                 refY="4"
                 orient="auto"
               >
-                <polygon points="0 1, 8 4, 0 7" fill="#3b82f6" />
+                <polygon points="0 1, 8 4, 0 7" fill="#38bdf8" />
               </marker>
             </defs>
 
@@ -213,17 +213,24 @@ export const Flowinger: React.FC<FlowingerProps> = ({
               const midX = (srcX + tgtX) / 2;
               const midY = (srcY + tgtY) / 2;
 
+              const isDown = edge.data?.status === 'down';
+              const isAlternate = edge.data?.isAlternate;
+
               const strokeColor =
                 (edge.style?.stroke as string) ||
-                (edge.data?.status === 'down'
+                (isDown
                   ? '#ef4444'
+                  : isAlternate
+                  ? '#38bdf8'
                   : edge.data?.status === 'degraded'
                   ? '#f59e0b'
-                  : edge.data?.isAlternate
-                  ? '#3b82f6'
                   : '#10b981');
 
-              const isAnimated = edge.animated || edge.data?.animated;
+              const isAnimated = (edge.animated || edge.data?.animated) && !isDown;
+
+              const labelStr = edge.label ? String(edge.label) : '';
+              const badgeWidth = Math.max(50, labelStr.length * 7.5 + 16);
+              const badgeHalf = badgeWidth / 2;
 
               return (
                 <g key={edge.id} className="transition-all duration-300">
@@ -231,42 +238,42 @@ export const Flowinger: React.FC<FlowingerProps> = ({
                   <path
                     d={pathData}
                     fill="none"
-                    stroke="#0f172a"
-                    strokeWidth="6"
-                    opacity="0.8"
+                    stroke="#020617"
+                    strokeWidth={isAlternate ? 8 : isDown ? 6 : 5}
+                    opacity="0.9"
                   />
                   {/* Foreground stroke */}
                   <path
                     d={pathData}
                     fill="none"
                     stroke={strokeColor}
-                    strokeWidth={edge.data?.isAlternate ? 4 : 2.5}
-                    strokeDasharray={isAnimated ? '6 4' : undefined}
+                    strokeWidth={isAlternate ? 4 : isDown ? 3 : 2.5}
+                    strokeDasharray={isDown ? '8 6' : isAnimated ? '6 4' : undefined}
                     className={isAnimated ? 'animate-[dash_1s_linear_infinite]' : ''}
-                    opacity={edge.data?.status === 'down' ? 0.4 : 0.9}
+                    opacity={1}
                   />
                   {/* Edge label badge */}
                   {edge.label && (
                     <g transform={`translate(${midX}, ${midY})`}>
                       <rect
-                        x="-24"
+                        x={-badgeHalf}
                         y="-10"
-                        width="48"
+                        width={badgeWidth}
                         height="20"
-                        rx="4"
-                        fill="#1e293b"
+                        rx="5"
+                        fill="#0b132b"
                         stroke={strokeColor}
-                        strokeWidth="1"
+                        strokeWidth={isDown || isAlternate ? '1.5' : '1'}
                         className="opacity-95"
                       />
                       <text
                         x="0"
-                        y="4"
-                        fill="#e2e8f0"
+                        y="3.5"
+                        fill={isDown ? '#fca5a5' : isAlternate ? '#7dd3fc' : '#e2e8f0'}
                         fontSize="10"
                         fontFamily="monospace"
                         textAnchor="middle"
-                        fontWeight="600"
+                        fontWeight="700"
                       >
                         {edge.label}
                       </text>
@@ -395,6 +402,16 @@ export const Controls: React.FC<{
       )}
     </div>
   );
+};
+
+export const VERSION = '1.0.0-rc.1';
+
+export const useFlowinger = () => {
+  const context = useContext(FlowingerContext);
+  if (!context) {
+    throw new Error('useFlowinger must be used within a Flowinger provider');
+  }
+  return context;
 };
 
 export default Flowinger;
