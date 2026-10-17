@@ -44,13 +44,10 @@ export const Simulator: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [activeSimulationIncident, setActiveSimulationIncident] = useState<Incident | null>(null);
 
-  const hasInitializedRef = React.useRef(false);
-
-  // Initialize simTopology once from loaded topology
+  // Keep simTopology synchronized with live topology
   React.useEffect(() => {
-    if (!hasInitializedRef.current && topology?.nodes && topology.nodes.length > 0) {
+    if (topology?.nodes && topology.nodes.length > 0) {
       setSimTopology(topology);
-      hasInitializedRef.current = true;
     }
   }, [topology]);
 
@@ -75,46 +72,33 @@ export const Simulator: React.FC = () => {
     failedId: string,
     isNode: boolean
   ): string[] => {
-    if (failedId === 'node-edge-2') {
-      return ['node-core-1', 'node-core-2', 'node-edge-3', 'node-gw-2'];
+    // Known campus network detour shortcuts
+    if (failedId === 'router-b' || failedId === 'link-a-b') {
+      return ['router-a', 'server-d'];
     }
-    if (failedId === 'node-edge-1') {
-      return ['node-core-1', 'node-edge-2', 'node-gw-1'];
+    if (failedId === 'switch-c' || failedId === 'link-b-c') {
+      return ['router-a', 'router-b', 'server-d'];
     }
-    if (failedId === 'node-core-1') {
-      return ['node-core-2', 'node-edge-3', 'node-gw-2'];
-    }
-    if (failedId === 'node-core-2') {
-      return ['node-core-1', 'node-edge-1', 'node-gw-1'];
-    }
-    if (failedId === 'link-c1-c2') {
-      return ['node-core-1', 'node-edge-2', 'node-core-2', 'node-edge-3', 'node-gw-2'];
-    }
-    if (failedId === 'link-c1-e1') {
-      return ['node-core-1', 'node-edge-2', 'node-gw-1'];
-    }
-    if (failedId === 'link-c1-e2') {
-      return ['node-core-1', 'node-core-2', 'node-edge-3', 'node-gw-2'];
-    }
-    if (failedId === 'node-gw-1') {
-      return ['node-core-1', 'node-edge-2', 'node-gw-2'];
-    }
-    if (failedId === 'node-gw-2') {
-      return ['node-core-2', 'node-edge-2', 'node-gw-1'];
+    if (failedId === 'server-d' || failedId === 'link-b-d') {
+      return ['router-a', 'router-b', 'switch-c', 'server-e'];
     }
 
-    // Dynamic BFS fallback
+    // Dynamic BFS fallback for any topology
     const adj = new Map<string, string[]>();
     nodes.forEach((n) => adj.set(n.id, []));
     links.forEach((l) => {
+      const srcId = l.source_node_id || l.source || '';
+      const tgtId = l.target_node_id || l.target || '';
       if (l.id === failedId || l.status === 'down') return;
-      if (isNode && (l.source_node_id === failedId || l.target_node_id === failedId)) return;
-      adj.get(l.source_node_id)?.push(l.target_node_id);
-      adj.get(l.target_node_id)?.push(l.source_node_id);
+      if (isNode && (srcId === failedId || tgtId === failedId)) return;
+      adj.get(srcId)?.push(tgtId);
+      adj.get(tgtId)?.push(srcId);
     });
 
-    const src = failedId === 'node-core-1' ? 'node-core-2' : 'node-core-1';
-    const dst = failedId === 'node-gw-2' ? 'node-gw-1' : 'node-gw-2';
+    const src = failedId === (nodes[0]?.id) ? (nodes[1]?.id || 'router-b') : (nodes[0]?.id || 'router-a');
+    const dst = failedId === (nodes[nodes.length - 1]?.id)
+      ? (nodes[nodes.length - 2]?.id || 'server-d')
+      : (nodes[nodes.length - 1]?.id || 'server-e');
 
     const queue: string[][] = [[src]];
     const visited = new Set<string>([src]);

@@ -39,9 +39,11 @@ export const TopologyView: React.FC = () => {
     }
 
     const nodeIds = new Set(filteredNodes.map((n) => n.id));
-    const filteredLinks = topology.links.filter(
-      (l) => nodeIds.has(l.source_node_id) && nodeIds.has(l.target_node_id)
-    );
+    const filteredLinks = topology.links.filter((l) => {
+      const src = l.source_node_id || l.source;
+      const tgt = l.target_node_id || l.target;
+      return nodeIds.has(src || '') && nodeIds.has(tgt || '');
+    });
 
     return {
       nodes: filteredNodes,

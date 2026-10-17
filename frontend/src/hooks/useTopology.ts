@@ -4,30 +4,66 @@ import { getTopology } from '../services/api';
 import { useWebSocket } from './useWebSocket';
 
 /**
- * Baseline network topology fallback if backend is starting or offline
+ * Baseline 5-node campus topology matching backend default configuration
  */
-const DEFAULT_TOPOLOGY: Topology = {
+export const DEFAULT_TOPOLOGY: Topology = {
   nodes: [
-    { id: 'node-core-1', name: 'Core-Router-A', ip_address: '10.0.0.1', node_type: 'core_router', status: 'up', x: 260, y: 80 },
-    { id: 'node-core-2', name: 'Core-Router-B', ip_address: '10.0.0.2', node_type: 'core_router', status: 'up', x: 500, y: 80 },
-    { id: 'node-edge-1', name: 'Edge-Switch-1', ip_address: '10.0.1.1', node_type: 'edge_router', status: 'up', x: 120, y: 220 },
-    { id: 'node-edge-2', name: 'Edge-Switch-2', ip_address: '10.0.1.2', node_type: 'edge_router', status: 'up', x: 380, y: 220 },
-    { id: 'node-edge-3', name: 'Edge-Switch-3', ip_address: '10.0.1.3', node_type: 'edge_router', status: 'up', x: 640, y: 220 },
-    { id: 'node-gw-1', name: 'Gateway-East', ip_address: '10.0.2.1', node_type: 'gateway', status: 'up', x: 240, y: 360 },
-    { id: 'node-gw-2', name: 'Gateway-West', ip_address: '10.0.2.2', node_type: 'gateway', status: 'up', x: 520, y: 360 },
+    { id: 'router-a', name: 'router-a', ip_address: '192.168.1.1', node_type: 'router', status: 'up', x: 90, y: 210 },
+    { id: 'router-b', name: 'router-b', ip_address: '192.168.1.2', node_type: 'router', status: 'up', x: 360, y: 90 },
+    { id: 'switch-c', name: 'switch-c', ip_address: '192.168.1.3', node_type: 'switch', status: 'up', x: 360, y: 330 },
+    { id: 'server-d', name: 'server-d', ip_address: '192.168.1.4', node_type: 'server', status: 'up', x: 650, y: 90 },
+    { id: 'server-e', name: 'server-e', ip_address: '192.168.1.5', node_type: 'server', status: 'up', x: 650, y: 330 },
   ],
   links: [
-    { id: 'link-c1-c2', source_node_id: 'node-core-1', target_node_id: 'node-core-2', status: 'up', weight: 5, bandwidth_mbps: 10000 },
-    { id: 'link-c1-e1', source_node_id: 'node-core-1', target_node_id: 'node-edge-1', status: 'up', weight: 10, bandwidth_mbps: 1000 },
-    { id: 'link-c1-e2', source_node_id: 'node-core-1', target_node_id: 'node-edge-2', status: 'up', weight: 10, bandwidth_mbps: 1000 },
-    { id: 'link-c2-e2', source_node_id: 'node-core-2', target_node_id: 'node-edge-2', status: 'up', weight: 10, bandwidth_mbps: 1000 },
-    { id: 'link-c2-e3', source_node_id: 'node-core-2', target_node_id: 'node-edge-3', status: 'up', weight: 10, bandwidth_mbps: 1000 },
-    { id: 'link-e1-gw1', source_node_id: 'node-edge-1', target_node_id: 'node-gw-1', status: 'up', weight: 15, bandwidth_mbps: 1000 },
-    { id: 'link-e2-gw1', source_node_id: 'node-edge-2', target_node_id: 'node-gw-1', status: 'up', weight: 15, bandwidth_mbps: 1000 },
-    { id: 'link-e2-gw2', source_node_id: 'node-edge-2', target_node_id: 'node-gw-2', status: 'up', weight: 15, bandwidth_mbps: 1000 },
-    { id: 'link-e3-gw2', source_node_id: 'node-edge-3', target_node_id: 'node-gw-2', status: 'up', weight: 15, bandwidth_mbps: 1000 },
+    { id: 'link-a-b', source_node_id: 'router-a', target_node_id: 'router-b', source: 'router-a', target: 'router-b', status: 'up', weight: 1, bandwidth_mbps: 1000 },
+    { id: 'link-b-c', source_node_id: 'router-b', target_node_id: 'switch-c', source: 'router-b', target: 'switch-c', status: 'up', weight: 2, bandwidth_mbps: 100 },
+    { id: 'link-b-d', source_node_id: 'router-b', target_node_id: 'server-d', source: 'router-b', target: 'server-d', status: 'up', weight: 3, bandwidth_mbps: 100 },
+    { id: 'link-c-d', source_node_id: 'switch-c', target_node_id: 'server-d', source: 'switch-c', target: 'server-d', status: 'up', weight: 2, bandwidth_mbps: 100 },
+    { id: 'link-c-e', source_node_id: 'switch-c', target_node_id: 'server-e', source: 'switch-c', target: 'server-e', status: 'up', weight: 2, bandwidth_mbps: 100 },
+    { id: 'link-a-d', source_node_id: 'router-a', target_node_id: 'server-d', source: 'router-a', target: 'server-d', status: 'up', weight: 5, bandwidth_mbps: 100 },
   ],
 };
+
+/**
+ * Normalizes raw topology payload from REST API or WebSocket snapshots
+ */
+export function normalizeTopology(data: any): Topology {
+  if (!data || !Array.isArray(data.nodes) || data.nodes.length === 0) {
+    return DEFAULT_TOPOLOGY;
+  }
+
+  const nodes: Node[] = data.nodes.map((n: any) => ({
+    id: n.id,
+    name: n.name || n.id,
+    ip_address: n.ip_address || n.ip || '',
+    node_type: n.node_type || n.type || 'router',
+    status: n.status || 'up',
+    x: n.x,
+    y: n.y,
+    last_seen: n.last_seen,
+  }));
+
+  const links: Link[] = (Array.isArray(data.links) ? data.links : []).map((l: any) => {
+    const src = l.source_node_id || l.source || '';
+    const tgt = l.target_node_id || l.target || '';
+    return {
+      id: l.id || `link-${src}-${tgt}`,
+      source_node_id: src,
+      target_node_id: tgt,
+      source: src,
+      target: tgt,
+      status: l.status || 'up',
+      weight: typeof l.weight === 'number' ? l.weight : 1,
+      bandwidth_mbps: l.bandwidth_mbps ?? l.bandwidth ?? 100,
+      latency_ms: l.latency_ms,
+    };
+  });
+
+  return { nodes, links };
+}
+
+// Module-level persistent cache across route changes
+let cachedTopology: Topology = DEFAULT_TOPOLOGY;
 
 interface UseTopologyReturn {
   topology: Topology;
@@ -37,8 +73,8 @@ interface UseTopologyReturn {
 }
 
 export function useTopology(): UseTopologyReturn {
-  const [topology, setTopology] = useState<Topology>(DEFAULT_TOPOLOGY);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [topology, setTopology] = useState<Topology>(cachedTopology);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const { topology: wsTopology } = useWebSocket();
@@ -49,10 +85,11 @@ export function useTopology(): UseTopologyReturn {
       setError(null);
       const data = await getTopology();
       if (data && Array.isArray(data.nodes) && data.nodes.length > 0) {
-        setTopology(data);
+        const normalized = normalizeTopology(data);
+        cachedTopology = normalized;
+        setTopology(normalized);
       }
     } catch (err: any) {
-      // Retain default demo topology so user sees an active network even before backend starts
       setError(err?.message || 'Failed to fetch topology');
     } finally {
       setLoading(false);
@@ -67,7 +104,9 @@ export function useTopology(): UseTopologyReturn {
   // Update when WebSocket delivers new topology
   useEffect(() => {
     if (wsTopology && Array.isArray(wsTopology.nodes) && wsTopology.nodes.length > 0) {
-      setTopology(wsTopology);
+      const normalized = normalizeTopology(wsTopology);
+      cachedTopology = normalized;
+      setTopology(normalized);
     }
   }, [wsTopology]);
 

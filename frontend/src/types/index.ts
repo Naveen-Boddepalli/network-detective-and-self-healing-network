@@ -56,9 +56,13 @@ export interface Link {
   id: string;
   source_node_id: string;
   target_node_id: string;
+  source?: string;
+  target?: string;
   status: 'up' | 'down' | 'degraded' | LinkStatus;
   weight: number;
   bandwidth_mbps: number;
+  bandwidth?: number;
+  latency_ms?: number;
 }
 
 export interface Topology {

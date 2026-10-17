@@ -88,10 +88,16 @@ export const Flowinger: React.FC<FlowingerProps> = ({
   const isPanningRef = useRef<boolean>(false);
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Node position lookup map
+  // Node position lookup map (exact and normalized case-insensitive)
   const nodeMap = useMemo(() => {
     const map = new Map<string, FlowingerNode>();
-    nodes.forEach((n) => map.set(n.id, n));
+    nodes.forEach((n) => {
+      if (n && n.id) {
+        map.set(n.id, n);
+        map.set(n.id.trim(), n);
+        map.set(n.id.trim().toLowerCase(), n);
+      }
+    });
     return map;
   }, [nodes]);
 
@@ -231,8 +237,10 @@ export const Flowinger: React.FC<FlowingerProps> = ({
   const computedEdges = useMemo<ComputedEdge[]>(() => {
     const list: ComputedEdge[] = [];
     edges.forEach((edge, edgeIndex) => {
-      const srcNode = nodeMap.get(edge.source);
-      const tgtNode = nodeMap.get(edge.target);
+      const srcId = String(edge.source || '').trim();
+      const tgtId = String(edge.target || '').trim();
+      const srcNode = nodeMap.get(srcId) || nodeMap.get(srcId.toLowerCase());
+      const tgtNode = nodeMap.get(tgtId) || nodeMap.get(tgtId.toLowerCase());
       if (!srcNode || !tgtNode) return;
 
       const srcPos = draggedPositions[srcNode.id] || srcNode.position;

@@ -71,7 +71,25 @@ export function useWebSocket(url?: string): UseWebSocketReturn {
           // Handle Topology Updates
           if (type === 'TOPOLOGY_UPDATED' || type === 'TOPOLOGY') {
             if (data && Array.isArray(data.nodes) && Array.isArray(data.links)) {
-              setTopology(data as Topology);
+              const normalizedTopology: Topology = {
+                nodes: data.nodes,
+                links: data.links.map((l: any) => {
+                  const src = l.source_node_id || l.source || '';
+                  const tgt = l.target_node_id || l.target || '';
+                  return {
+                    ...l,
+                    id: l.id || `link-${src}-${tgt}`,
+                    source_node_id: src,
+                    target_node_id: tgt,
+                    source: src,
+                    target: tgt,
+                    bandwidth_mbps: l.bandwidth_mbps ?? l.bandwidth ?? 100,
+                    status: l.status || 'up',
+                    weight: typeof l.weight === 'number' ? l.weight : 1,
+                  };
+                }),
+              };
+              setTopology(normalizedTopology);
             }
           }
 

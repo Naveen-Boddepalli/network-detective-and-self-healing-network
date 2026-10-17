@@ -220,37 +220,41 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     }
 
     return topology.links.map((link) => {
+      const sourceId = link.source_node_id || link.source || '';
+      const targetId = link.target_node_id || link.target || '';
+
       const isDirectlyDown =
         (link.status || '').toLowerCase() === 'down' ||
         activeIncident?.affected_component === link.id;
 
       const connectsToDownedNode =
-        downedNodeIds.has(link.source_node_id) ||
-        downedNodeIds.has(link.target_node_id);
+        downedNodeIds.has(sourceId) ||
+        downedNodeIds.has(targetId);
 
       const isSevered = isDirectlyDown || connectsToDownedNode;
 
       const isAlt =
         !isSevered &&
-        (altPairs.has(`${link.source_node_id}->${link.target_node_id}`) ||
-          altPairs.has(`${link.target_node_id}->${link.source_node_id}`));
+        (altPairs.has(`${sourceId}->${targetId}`) ||
+          altPairs.has(`${targetId}->${sourceId}`));
 
       const edgeStatus = isSevered
         ? 'down'
         : (link.status || 'up').toLowerCase();
 
+      const bandwidth = link.bandwidth_mbps ?? (link as any).bandwidth ?? 100;
       const label = isSevered
         ? '✖ SEVERED'
         : isAlt
         ? '⚡ HEALED'
-        : link.bandwidth_mbps >= 1000
-        ? `${link.bandwidth_mbps / 1000}G`
-        : `${link.bandwidth_mbps}M`;
+        : bandwidth >= 1000
+        ? `${bandwidth / 1000}G`
+        : `${bandwidth}M`;
 
       return {
-        id: link.id,
-        source: link.source_node_id,
-        target: link.target_node_id,
+        id: link.id || `link-${sourceId}-${targetId}`,
+        source: sourceId,
+        target: targetId,
         label,
         animated: !isSevered && (edgeStatus === 'up' || isAlt),
         data: {
