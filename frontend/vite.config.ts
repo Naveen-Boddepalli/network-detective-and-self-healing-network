@@ -18,11 +18,21 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', () => {
+            // Backend offline or reloading - suppress unhandled error dump
+          });
+        },
       },
       '/ws': {
         target: 'ws://localhost:8000',
         ws: true,
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', () => {
+            // WebSocket reset during uvicorn reload - suppress EPIPE/ECONNRESET noise
+          });
+        },
       },
     },
   },

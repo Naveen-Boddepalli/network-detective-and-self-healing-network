@@ -134,12 +134,12 @@ const FIXED_LAYOUT: Record<string, { x: number; y: number }> = {
   'node-edge-3': { x: 640, y: 200 },
   'node-gw-1': { x: 240, y: 330 },
   'node-gw-2': { x: 520, y: 330 },
-  // 5-Node Campus Topology
-  'router-a': { x: 150, y: 200 },
-  'router-b': { x: 350, y: 200 },
-  'switch-c': { x: 550, y: 200 },
-  'server-d': { x: 750, y: 120 },
-  'server-e': { x: 750, y: 280 },
+  // 5-Node Campus Topology - Non-overlapping hierarchical layout
+  'router-a': { x: 90, y: 210 },
+  'router-b': { x: 360, y: 90 },
+  'switch-c': { x: 360, y: 330 },
+  'server-d': { x: 650, y: 90 },
+  'server-e': { x: 650, y: 330 },
 };
 
 export const TopologyGraph: React.FC<TopologyGraphProps> = ({

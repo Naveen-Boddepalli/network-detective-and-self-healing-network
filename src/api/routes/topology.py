@@ -22,12 +22,12 @@ router = APIRouter(prefix="/api/topology", tags=["Topology"])
 
 # Fixed coordinates for campus network and mesh topology visualization layout
 DEFAULT_LAYOUT: dict[str, tuple[float, float]] = {
-    # 5-Node Campus Topology
-    "router-a": (150.0, 200.0),
-    "router-b": (350.0, 200.0),
-    "switch-c": (550.0, 200.0),
-    "server-d": (750.0, 120.0),
-    "server-e": (750.0, 280.0),
+    # 5-Node Campus Topology - Non-overlapping hierarchical layout
+    "router-a": (90.0, 210.0),
+    "router-b": (360.0, 90.0),
+    "switch-c": (360.0, 330.0),
+    "server-d": (650.0, 90.0),
+    "server-e": (650.0, 330.0),
     # 7-Node Multi-Tier Mesh
     "node-core-1": (260.0, 70.0),
     "node-core-2": (500.0, 70.0),

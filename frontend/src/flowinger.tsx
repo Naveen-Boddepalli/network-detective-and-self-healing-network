@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, createContext, useContext } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo, createContext, useContext } from 'react';
 
 export interface FlowingerNode<T = any> {
   id: string;
@@ -18,6 +18,22 @@ export interface FlowingerEdge {
   style?: React.CSSProperties;
   className?: string;
   data?: any;
+}
+
+interface ComputedEdge {
+  edge: FlowingerEdge;
+  pathData: string;
+  strokeColor: string;
+  isDown: boolean;
+  isAlternate: boolean;
+  isAnimated: boolean;
+  midX: number;
+  midY: number;
+  labelStr: string;
+  badgeWidth: number;
+  badgeHalf: number;
+  badgeFill: string;
+  labelTextColor: string;
 }
 
 interface FlowingerContextType {
@@ -54,36 +70,61 @@ export const Flowinger: React.FC<FlowingerProps> = ({
   const [zoom, setZoom] = useState<number>(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
+  // User-dragged custom node coordinates
+  const [draggedPositions, setDraggedPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [activeDragNodeId, setActiveDragNodeId] = useState<string | null>(null);
+
+  const dragNodeRef = useRef<{
+    nodeId: string;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    hasMoved: boolean;
+  } | null>(null);
+
+  const isPanningRef = useRef<boolean>(false);
+  const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Node position lookup map
+  const nodeMap = useMemo(() => {
+    const map = new Map<string, FlowingerNode>();
+    nodes.forEach((n) => map.set(n.id, n));
+    return map;
+  }, [nodes]);
+
   const zoomIn = useCallback(() => {
-    setZoom((z) => Math.min(z * 1.2, 2.5));
+    setZoom((z) => Math.min(z * 1.15, 2.2));
   }, []);
 
   const zoomOut = useCallback(() => {
-    setZoom((z) => Math.max(z / 1.2, 0.4));
+    setZoom((z) => Math.max(z / 1.15, 0.4));
   }, []);
 
   const resetView = useCallback(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
+    setDraggedPositions({});
   }, []);
 
   const fitView = useCallback(() => {
     if (!containerRef.current || nodes.length === 0) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const minX = Math.min(...nodes.map((n) => n.position.x));
-    const maxX = Math.max(...nodes.map((n) => n.position.x + 180));
-    const minY = Math.min(...nodes.map((n) => n.position.y));
-    const maxY = Math.max(...nodes.map((n) => n.position.y + 100));
+    const allX = nodes.map((n) => (draggedPositions[n.id]?.x ?? n.position.x));
+    const allY = nodes.map((n) => (draggedPositions[n.id]?.y ?? n.position.y));
+    const minX = Math.min(...allX);
+    const maxX = Math.max(...allX) + 200;
+    const minY = Math.min(...allY);
+    const maxY = Math.max(...allY) + 100;
 
     const graphWidth = maxX - minX || 400;
     const graphHeight = maxY - minY || 300;
 
     const scaleX = (rect.width - 80) / graphWidth;
     const scaleY = (rect.height - 80) / graphHeight;
-    const newZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.5), 1.4);
+    const newZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.5), 1.3);
 
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
@@ -93,47 +134,202 @@ export const Flowinger: React.FC<FlowingerProps> = ({
       x: rect.width / 2 - centerX * newZoom,
       y: rect.height / 2 - centerY * newZoom,
     });
-  }, [nodes]);
+  }, [nodes, draggedPositions]);
 
+  // Canvas background mousedown (pan)
   const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.flowinger-node') || (e.target as HTMLElement).closest('.flowinger-controls')) {
+    if (
+      (e.target as HTMLElement).closest('.flowinger-node') ||
+      (e.target as HTMLElement).closest('.flowinger-controls')
+    ) {
       return;
     }
+    isPanningRef.current = true;
+    panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
     setIsDragging(true);
-    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setPan({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
-    });
+  // Node mousedown (drag)
+  const handleNodeMouseDown = (e: React.MouseEvent, node: FlowingerNode) => {
+    if (e.button !== 0) return; // left click only
+    e.stopPropagation();
+    const currentPos = draggedPositions[node.id] || node.position;
+    dragNodeRef.current = {
+      nodeId: node.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: currentPos.x,
+      origY: currentPos.y,
+      hasMoved: false,
+    };
+    setActiveDragNodeId(node.id);
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  // Global mousemove and mouseup listeners attached to window for smooth drag & drop
+  useEffect(() => {
+    if (!activeDragNodeId && !isDragging) return;
 
+    const onWindowMouseMove = (e: MouseEvent) => {
+      // 1. Dragging a node
+      if (dragNodeRef.current) {
+        const dx = (e.clientX - dragNodeRef.current.startX) / zoom;
+        const dy = (e.clientY - dragNodeRef.current.startY) / zoom;
+        if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+          dragNodeRef.current.hasMoved = true;
+        }
+        const newX = Math.round(dragNodeRef.current.origX + dx);
+        const newY = Math.round(dragNodeRef.current.origY + dy);
+        setDraggedPositions((prev) => ({
+          ...prev,
+          [dragNodeRef.current!.nodeId]: { x: newX, y: newY },
+        }));
+        return;
+      }
+
+      // 2. Panning canvas
+      if (isPanningRef.current) {
+        setPan({
+          x: e.clientX - panStartRef.current.x,
+          y: e.clientY - panStartRef.current.y,
+        });
+      }
+    };
+
+    const onWindowMouseUp = (e: MouseEvent) => {
+      if (dragNodeRef.current) {
+        const { nodeId, hasMoved } = dragNodeRef.current;
+        dragNodeRef.current = null;
+        setActiveDragNodeId(null);
+        if (!hasMoved) {
+          // Pure click, select node
+          setSelectedNodeId(nodeId);
+          const node = nodeMap.get(nodeId);
+          if (node) onNodeClick?.(e as unknown as React.MouseEvent, node);
+        }
+      }
+      isPanningRef.current = false;
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', onWindowMouseMove);
+    window.addEventListener('mouseup', onWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onWindowMouseMove);
+      window.removeEventListener('mouseup', onWindowMouseUp);
+    };
+  }, [activeDragNodeId, isDragging, zoom, nodeMap, onNodeClick]);
+
+  // Smooth, reduced sensitivity zoom (clamped delta + damped exponential response)
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom((z) => Math.min(Math.max(z * delta, 0.4), 2.5));
+    const clampedDelta = Math.max(Math.min(e.deltaY, 40), -40);
+    const zoomFactor = Math.exp(-clampedDelta * 0.001);
+    setZoom((z) => Math.min(Math.max(z * zoomFactor, 0.4), 2.2));
   };
 
-  // Node position lookup map
-  const nodeMap = new Map<string, FlowingerNode>();
-  nodes.forEach((n) => nodeMap.set(n.id, n));
+  // Precompute curved edge geometry and styles
+  const computedEdges = useMemo<ComputedEdge[]>(() => {
+    const list: ComputedEdge[] = [];
+    edges.forEach((edge, edgeIndex) => {
+      const srcNode = nodeMap.get(edge.source);
+      const tgtNode = nodeMap.get(edge.target);
+      if (!srcNode || !tgtNode) return;
+
+      const srcPos = draggedPositions[srcNode.id] || srcNode.position;
+      const tgtPos = draggedPositions[tgtNode.id] || tgtNode.position;
+
+      // Approximate center of node cards (190px width x 80px height)
+      const srcX = srcPos.x + 95;
+      const srcY = srcPos.y + 40;
+      const tgtX = tgtPos.x + 95;
+      const tgtY = tgtPos.y + 40;
+
+      const dx = tgtX - srcX;
+      const dy = tgtY - srcY;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+
+      // Curve offset to prevent overlapping edge lines
+      const curveMagnitude = ((edgeIndex % 3) - 1) * 26;
+      const cx1 = srcX + dx * 0.35 + nx * curveMagnitude;
+      const cy1 = srcY + dy * 0.35 + ny * curveMagnitude;
+      const cx2 = srcX + dx * 0.65 + nx * curveMagnitude;
+      const cy2 = srcY + dy * 0.65 + ny * curveMagnitude;
+
+      const midX = (srcX + tgtX) / 2 + nx * (curveMagnitude * 0.7);
+      const midY = (srcY + tgtY) / 2 + ny * (curveMagnitude * 0.7);
+
+      const pathData = `M ${srcX} ${srcY} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${tgtX} ${tgtY}`;
+
+      const isDown = edge.data?.status === 'down';
+      const isAlternate = !!edge.data?.isAlternate;
+      const isDegraded = edge.data?.status === 'degraded';
+
+      const strokeColor =
+        (edge.style?.stroke as string) ||
+        (isDown
+          ? '#ef4444'
+          : isAlternate
+          ? '#38bdf8'
+          : isDegraded
+          ? '#f59e0b'
+          : '#10b981');
+
+      const isAnimated = !!((edge.animated || edge.data?.animated) && !isDown);
+
+      const labelStr = edge.label ? String(edge.label) : '';
+      const badgeWidth = Math.max(56, labelStr.length * 8.5 + 20);
+      const badgeHalf = badgeWidth / 2;
+
+      const badgeFill = isDown
+        ? '#220808'
+        : isAlternate
+        ? '#042230'
+        : isDegraded
+        ? '#241403'
+        : '#061a12';
+
+      const labelTextColor = isDown
+        ? '#fca5a5'
+        : isAlternate
+        ? '#7dd3fc'
+        : isDegraded
+        ? '#fcd34d'
+        : '#6ee7b7';
+
+      list.push({
+        edge,
+        pathData,
+        strokeColor,
+        isDown,
+        isAlternate,
+        isAnimated,
+        midX,
+        midY,
+        labelStr,
+        badgeWidth,
+        badgeHalf,
+        badgeFill,
+        labelTextColor,
+      });
+    });
+    return list;
+  }, [edges, nodeMap, draggedPositions]);
 
   return (
     <FlowingerContext.Provider value={{ zoom, pan, zoomIn, zoomOut, resetView, fitView }}>
       <div
         ref={containerRef}
-        className={`relative w-full h-full overflow-hidden select-none bg-gray-950 cursor-grab active:cursor-grabbing ${className}`}
+        className={`relative w-full h-full overflow-hidden select-none bg-gray-950 ${
+          activeDragNodeId
+            ? 'cursor-grabbing'
+            : isDragging
+            ? 'cursor-grabbing'
+            : 'cursor-grab'
+        } ${className}`}
         style={style}
         onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
         onWheel={handleWheel}
       >
         {children}
@@ -149,6 +345,9 @@ export const Flowinger: React.FC<FlowingerProps> = ({
           {/* SVG Edges Layer */}
           <svg className="absolute inset-0 w-[5000px] h-[5000px] pointer-events-none overflow-visible">
             <defs>
+              <filter id="badge-shadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.8" />
+              </filter>
               <marker
                 id="arrowhead-up"
                 markerWidth="8"
@@ -191,119 +390,110 @@ export const Flowinger: React.FC<FlowingerProps> = ({
               </marker>
             </defs>
 
-            {edges.map((edge) => {
-              const srcNode = nodeMap.get(edge.source);
-              const tgtNode = nodeMap.get(edge.target);
-              if (!srcNode || !tgtNode) return null;
+            {/* Layer 1: Edge Path Lines */}
+            <g className="flowinger-edge-paths">
+              {computedEdges.map((item) => {
+                if (!item) return null;
+                const { edge, pathData, strokeColor, isAlternate, isDown, isAnimated } = item;
+                return (
+                  <g key={`path-${edge.id}`}>
+                    <path
+                      d={pathData}
+                      fill="none"
+                      stroke="#020617"
+                      strokeWidth={isAlternate ? 8 : isDown ? 6 : 5}
+                      opacity="0.9"
+                    />
+                    <path
+                      d={pathData}
+                      fill="none"
+                      stroke={strokeColor}
+                      strokeWidth={isAlternate ? 4 : isDown ? 3 : 2.5}
+                      strokeDasharray={isDown ? '8 6' : isAnimated ? '6 4' : undefined}
+                      className={isAnimated ? 'animate-[dash_1s_linear_infinite]' : ''}
+                      opacity={1}
+                    />
+                  </g>
+                );
+              })}
+            </g>
 
-              // Estimated node center (assuming ~170px width, ~60px height)
-              const srcX = srcNode.position.x + 85;
-              const srcY = srcNode.position.y + 30;
-              const tgtX = tgtNode.position.x + 85;
-              const tgtY = tgtNode.position.y + 30;
-
-              // Calculate control points for gentle curve
-              const dx = tgtX - srcX;
-              const dy = tgtY - srcY;
-              const cx1 = srcX + dx * 0.4;
-              const cy1 = srcY;
-              const cx2 = srcX + dx * 0.6;
-              const cy2 = tgtY;
-
-              const pathData = `M ${srcX} ${srcY} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${tgtX} ${tgtY}`;
-              const midX = (srcX + tgtX) / 2;
-              const midY = (srcY + tgtY) / 2;
-
-              const isDown = edge.data?.status === 'down';
-              const isAlternate = edge.data?.isAlternate;
-
-              const strokeColor =
-                (edge.style?.stroke as string) ||
-                (isDown
-                  ? '#ef4444'
-                  : isAlternate
-                  ? '#38bdf8'
-                  : edge.data?.status === 'degraded'
-                  ? '#f59e0b'
-                  : '#10b981');
-
-              const isAnimated = (edge.animated || edge.data?.animated) && !isDown;
-
-              const labelStr = edge.label ? String(edge.label) : '';
-              const badgeWidth = Math.max(50, labelStr.length * 7.5 + 16);
-              const badgeHalf = badgeWidth / 2;
-
-              return (
-                <g key={edge.id} className="transition-all duration-300">
-                  {/* Background shadow stroke */}
-                  <path
-                    d={pathData}
-                    fill="none"
-                    stroke="#020617"
-                    strokeWidth={isAlternate ? 8 : isDown ? 6 : 5}
-                    opacity="0.9"
-                  />
-                  {/* Foreground stroke */}
-                  <path
-                    d={pathData}
-                    fill="none"
-                    stroke={strokeColor}
-                    strokeWidth={isAlternate ? 4 : isDown ? 3 : 2.5}
-                    strokeDasharray={isDown ? '8 6' : isAnimated ? '6 4' : undefined}
-                    className={isAnimated ? 'animate-[dash_1s_linear_infinite]' : ''}
-                    opacity={1}
-                  />
-                  {/* Edge label badge */}
-                  {edge.label && (
-                    <g transform={`translate(${midX}, ${midY})`}>
-                      <rect
-                        x={-badgeHalf}
-                        y="-10"
-                        width={badgeWidth}
-                        height="20"
-                        rx="5"
-                        fill="#0b132b"
-                        stroke={strokeColor}
-                        strokeWidth={isDown || isAlternate ? '1.5' : '1'}
-                        className="opacity-95"
-                      />
-                      <text
-                        x="0"
-                        y="3.5"
-                        fill={isDown ? '#fca5a5' : isAlternate ? '#7dd3fc' : '#e2e8f0'}
-                        fontSize="10"
-                        fontFamily="monospace"
-                        textAnchor="middle"
-                        fontWeight="700"
-                      >
-                        {edge.label}
-                      </text>
-                    </g>
-                  )}
-                </g>
-              );
-            })}
+            {/* Layer 2: Edge Label Badges (Rendered over paths so no line cuts through them) */}
+            <g className="flowinger-edge-labels">
+              {computedEdges.map((item) => {
+                if (!item || !item.labelStr) return null;
+                const {
+                  edge,
+                  midX,
+                  midY,
+                  labelStr,
+                  badgeWidth,
+                  badgeHalf,
+                  strokeColor,
+                  isDown,
+                  isAlternate,
+                  badgeFill,
+                  labelTextColor,
+                } = item;
+                return (
+                  <g
+                    key={`label-${edge.id}`}
+                    transform={`translate(${midX}, ${midY})`}
+                    className="pointer-events-none select-none"
+                  >
+                    <rect
+                      x={-badgeHalf}
+                      y="-11"
+                      width={badgeWidth}
+                      height="22"
+                      rx="6"
+                      fill={badgeFill}
+                      stroke={strokeColor}
+                      strokeWidth={isDown || isAlternate ? '2' : '1.5'}
+                      strokeOpacity="0.95"
+                      filter="url(#badge-shadow)"
+                    />
+                    <text
+                      x="0"
+                      y="0"
+                      dominantBaseline="central"
+                      textAnchor="middle"
+                      fill={labelTextColor}
+                      fontSize="11"
+                      fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                      fontWeight="700"
+                      letterSpacing="0.02em"
+                    >
+                      {labelStr}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
           </svg>
 
           {/* Nodes Layer */}
           {nodes.map((node) => {
             const CustomComponent = node.type && nodeTypes ? nodeTypes[node.type] : null;
             const isSelected = selectedNodeId === node.id;
+            const isBeingDragged = activeDragNodeId === node.id;
+            const pos = draggedPositions[node.id] || node.position;
 
             return (
               <div
                 key={node.id}
-                className={`flowinger-node absolute cursor-pointer select-none ${
-                  isSelected ? 'z-30' : 'z-10'
+                className={`flowinger-node absolute select-none ${
+                  isBeingDragged
+                    ? 'z-50 cursor-grabbing shadow-2xl scale-[1.02]'
+                    : isSelected
+                    ? 'z-30 cursor-grab ring-2 ring-blue-500/50'
+                    : 'z-10 cursor-grab hover:z-20'
                 } ${node.className || ''}`}
                 style={{
-                  transform: `translate(${node.position.x}px, ${node.position.y}px)`,
+                  transform: `translate(${pos.x}px, ${pos.y}px)`,
                   ...node.style,
                 }}
-                onClick={(e) => {
-                  setSelectedNodeId(node.id);
-                  onNodeClick?.(e, node);
-                }}
+                onMouseDown={(e) => handleNodeMouseDown(e, node)}
               >
                 {CustomComponent ? (
                   <CustomComponent id={node.id} data={node.data} selected={isSelected} />
