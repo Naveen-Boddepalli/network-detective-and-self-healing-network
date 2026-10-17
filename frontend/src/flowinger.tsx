@@ -140,9 +140,10 @@ export const Flowinger: React.FC<FlowingerProps> = ({
 
         {/* Scaled/Panned Graph Layer */}
         <div
-          className="absolute inset-0 origin-top-left transition-transform duration-75"
+          className="absolute inset-0 origin-top-left"
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            willChange: 'transform',
           }}
         >
           {/* SVG Edges Layer */}
@@ -292,7 +293,9 @@ export const Flowinger: React.FC<FlowingerProps> = ({
             return (
               <div
                 key={node.id}
-                className={`flowinger-node absolute cursor-pointer select-none transition-transform duration-150 hover:scale-105 ${node.className || ''}`}
+                className={`flowinger-node absolute cursor-pointer select-none ${
+                  isSelected ? 'z-30' : 'z-10'
+                } ${node.className || ''}`}
                 style={{
                   transform: `translate(${node.position.x}px, ${node.position.y}px)`,
                   ...node.style,

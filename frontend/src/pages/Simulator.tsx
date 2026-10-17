@@ -44,17 +44,15 @@ export const Simulator: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [activeSimulationIncident, setActiveSimulationIncident] = useState<Incident | null>(null);
 
-  // Sync simTopology with backend topology if idle
+  const hasInitializedRef = React.useRef(false);
+
+  // Initialize simTopology once from loaded topology
   React.useEffect(() => {
-    if (topology && topology.nodes && topology.nodes.length > 0) {
-      setSimTopology((prev) => {
-        if (!activeSimulationIncident) {
-          return topology;
-        }
-        return prev;
-      });
+    if (!hasInitializedRef.current && topology?.nodes && topology.nodes.length > 0) {
+      setSimTopology(topology);
+      hasInitializedRef.current = true;
     }
-  }, [topology, activeSimulationIncident]);
+  }, [topology]);
 
   const addEvent = (message: string, level: SimulationEvent['level'] = 'info') => {
     setEvents((prev) => [

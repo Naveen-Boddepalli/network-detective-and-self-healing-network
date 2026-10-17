@@ -20,13 +20,22 @@ from src.monitor.topology_builder import TopologyBuilder, get_topology
 
 router = APIRouter(prefix="/api/topology", tags=["Topology"])
 
-# Fixed coordinates for campus network topology visualization layout
+# Fixed coordinates for campus network and mesh topology visualization layout
 DEFAULT_LAYOUT: dict[str, tuple[float, float]] = {
-    "router-a": (150.0, 300.0),
-    "router-b": (350.0, 300.0),
-    "switch-c": (550.0, 300.0),
-    "server-d": (750.0, 180.0),
-    "server-e": (750.0, 420.0),
+    # 5-Node Campus Topology
+    "router-a": (150.0, 200.0),
+    "router-b": (350.0, 200.0),
+    "switch-c": (550.0, 200.0),
+    "server-d": (750.0, 120.0),
+    "server-e": (750.0, 280.0),
+    # 7-Node Multi-Tier Mesh
+    "node-core-1": (260.0, 70.0),
+    "node-core-2": (500.0, 70.0),
+    "node-edge-1": (120.0, 200.0),
+    "node-edge-2": (380.0, 200.0),
+    "node-edge-3": (640.0, 200.0),
+    "node-gw-1": (240.0, 330.0),
+    "node-gw-2": (520.0, 330.0),
 }
 
 
@@ -84,7 +93,7 @@ async def get_full_topology(
 
     # 2. Build NodeResponse list
     node_responses: list[NodeResponse] = []
-    for node_id in graph.nodes:
+    for node_id in sorted(graph.nodes):
         node_data = graph.nodes[node_id]
         db_node = db_nodes.get(node_id)
 

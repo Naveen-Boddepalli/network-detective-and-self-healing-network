@@ -124,6 +124,24 @@ const NetworkNodeComponent: React.FC<{
   );
 };
 
+// Deterministic fixed positions for known topology nodes to prevent layout shifts
+const FIXED_LAYOUT: Record<string, { x: number; y: number }> = {
+  // 7-Node Multi-Tier Mesh
+  'node-core-1': { x: 260, y: 70 },
+  'node-core-2': { x: 500, y: 70 },
+  'node-edge-1': { x: 120, y: 200 },
+  'node-edge-2': { x: 380, y: 200 },
+  'node-edge-3': { x: 640, y: 200 },
+  'node-gw-1': { x: 240, y: 330 },
+  'node-gw-2': { x: 520, y: 330 },
+  // 5-Node Campus Topology
+  'router-a': { x: 150, y: 200 },
+  'router-b': { x: 350, y: 200 },
+  'switch-c': { x: 550, y: 200 },
+  'server-d': { x: 750, y: 120 },
+  'server-e': { x: 750, y: 280 },
+};
+
 export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   topology,
   selectedNodeId,
@@ -137,16 +155,20 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     if (!topology || !topology.nodes) return [];
 
     return topology.nodes.map((node, index) => {
-      // Automatic ring or tiered layout if x/y are missing
+      // Prioritize explicit node.x, then fixed known coordinate, then tiered grid
+      const fixed = FIXED_LAYOUT[node.id];
       const posX =
         node.x ??
+        fixed?.x ??
         (index % 3 === 0
           ? 120
           : index % 3 === 1
           ? 380
           : 640);
       const posY =
-        node.y ?? (80 + Math.floor(index / 3) * 140);
+        node.y ??
+        fixed?.y ??
+        (80 + Math.floor(index / 3) * 140);
 
       const isAffected =
         activeIncident?.affected_component === node.id ||
