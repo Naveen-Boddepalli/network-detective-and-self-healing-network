@@ -68,6 +68,8 @@ class LinkResponse(BaseSchema):
     id: str = Field(..., description="Unique link identifier (e.g. 'link-a-b')")
     source_node_id: str = Field(..., description="Source node ID")
     target_node_id: str = Field(..., description="Target node ID")
+    source: str | None = Field(default=None, description="Source node ID alias")
+    target: str | None = Field(default=None, description="Target node ID alias")
     status: LinkStatus | str = Field(default=LinkStatus.UP, description="Current operational status")
     weight: float = Field(default=1.0, description="Routing cost / weight")
     bandwidth_mbps: float = Field(default=100.0, description="Bandwidth capacity in Mbps")

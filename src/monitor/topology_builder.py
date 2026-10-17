@@ -233,6 +233,8 @@ class TopologyBuilder:
             link_dict = dict(attrs)
             link_dict["source"] = u
             link_dict["target"] = v
+            link_dict["source_node_id"] = u
+            link_dict["target_node_id"] = v
             links.append(link_dict)
 
         up_nodes = sum(1 for n in nodes if n.get("status") == NodeStatus.UP.value)

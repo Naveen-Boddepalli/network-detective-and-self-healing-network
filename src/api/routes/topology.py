@@ -134,6 +134,8 @@ async def get_full_topology(
                 id=link_id,
                 source_node_id=u,
                 target_node_id=v,
+                source=u,
+                target=v,
                 status=status,
                 weight=weight,
                 bandwidth_mbps=bandwidth,
